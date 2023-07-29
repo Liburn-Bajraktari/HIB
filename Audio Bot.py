@@ -85,4 +85,4 @@ async def display_queue(ctx):
     # Display the current queue
     await ctx.send('\n'.join(queue))
 
-bot.run('MTEzNDU5MzAyMjcwNTgxNTY4Nw.GEIEbP.19Eu0de_uR8TDROED6mEDe8gr__93DGNgJQeFA')
+bot.run('Your Discord Token')
