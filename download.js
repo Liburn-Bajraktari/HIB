@@ -23,26 +23,21 @@ YouTube.search(search_term, { limit: 1 })
     .then(results => {
         if (results && results[0]) {
             let result = results[0];
+            
+            // Replace the filename with the video title
+            filename = `${result.title.replace(/[\/:*?"<>|]/g, '')}.mp3`;
 
             if (fs.existsSync(filename)) {
                 // If the file already exists, don't re-download it
                 log(`File ${filename} already exists, skipping download.`);
             } else {
-                // If a different file was downloaded last time, delete it
-                if (lastFile && lastFile !== filename) {
-                    try {
-                        fs.unlinkSync(lastFile);
-                    } catch (err) {
-                        log(`Failed to delete file ${lastFile}: ${err.message}`);
-                    }
-                }
-
                 // Start downloading the file
                 ytdl(result.url, {filter: 'audioonly'})
                     .pipe(fs.createWriteStream(filename))
                     .on('finish', () => {
                         // Update the name of the last downloaded file
-                        lastFile = filename;
+                        lastFile = filename; 
+                        fs.writeFileSync('filename.txt', filename);
                     });
             }
         }

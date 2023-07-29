@@ -1,6 +1,6 @@
 import subprocess
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import time
 import os
 import logging
@@ -20,9 +20,13 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 # Create a queue of search terms
 queue = []
 
+
 @bot.command(brief="This will play a song", aliases=['p', 'pla'])
 async def play(ctx, *, search_term: str):
     global queue
+
+    # Add a delay to prevent overloading
+    await asyncio.sleep(5)  # Async delay for 5 seconds
 
     logging.info(f"Received play command with search term: {search_term}")
 
@@ -39,50 +43,81 @@ async def play(ctx, *, search_term: str):
         if voice_client.channel != channel:
             await voice_client.move_to(channel)
 
-    logging.info(f"Voice client after connect or move: {voice_client}")
-
-
-    # Add the search term to the queue
-    queue.append(search_term)
+    # Add both the search term and context to the queue
+    queue.append((search_term, ctx))
     logging.info(f"Added {search_term} to queue")
 
-    # If the bot is not currently playing audio, start processing the queue
-    if not voice_client.is_playing() and not voice_client.is_paused():
-        await process_queue(ctx, voice_client)
+    # Run the Node.js script to download audio
+    subprocess.run(['node', 'download.js', search_term])
 
-async def process_queue(ctx, voice_client):
+
+@tasks.loop(seconds=1)
+async def process_queue():
     global queue
 
-    while queue:
-        # Get the next search term from the queue
-        search_term = queue.pop(0)
-        filename = f"{search_term.replace(' ', '_')}.mp3"
+    for guild in bot.guilds:
+        voice_client = guild.voice_client
 
-        # Run the Node.js script to download audio
-        subprocess.run(['node', 'download.js', search_term, filename])
+        if voice_client and not voice_client.is_playing() and queue:
+            # Get the next search term from the queue
+            search_term, ctx = queue.pop(0)
+            # Wait until the filename.txt file exists, up to a maximum of 5 attempts
+            for i in range(5):
+                if os.path.exists('filename.txt'):
+                    break
+                time.sleep(1)
+            else:
+                print(f"Failed to find filename for {search_term}")
+                return
 
-        # Wait until the file exists, up to a maximum of 5 attempts
-        for i in range(5):
-            if os.path.exists(filename):
-                break
-            time.sleep(5)
-        else:
-            await ctx.send(f"Failed to download audio for {search_term}")
-            return
+            # Read the filename from the filename.txt file
+            with open('filename.txt', 'r') as file:
+                filename = file.read().strip()
 
-        # Play the downloaded audio file
-        audio_source = discord.FFmpegPCMAudio(filename)
-        voice_client.play(audio_source, after=lambda e: print('Player error: %s' % e) if e else None)
+            # Remove the .mp3 extension
+            display_name = filename[:-4]
 
-        # Wait for the audio to finish playing before processing the next item in the queue
-        while voice_client.is_playing() or voice_client.is_paused():
-            await asyncio.sleep(1)
+            # Play the downloaded audio file
+            def after_playing(error):
+                if error:
+                    print(f'Player error: {error}')
+                else:
+                    if os.path.exists(filename):
+                        try:
+                            os.remove(filename)
+                            print(f'Successfully deleted file {filename}')
+                        except Exception as e:
+                            print(f'Failed to delete file {filename}: {e}')
+                    else:
+                        print(f'Warning: File {filename} not found, skipping deletion.')
 
-@bot.command(brief="This will display the current queue", aliases=['q', 'que'])
+            voice_client.play(discord.FFmpegPCMAudio(filename), after=after_playing)
+
+            await ctx.send('Now Playing **' + display_name + '**')
+
+
+@bot.command(brief="This will display the current queue", aliases=['q', 'queue'])
 async def display_queue(ctx):
     global queue
 
-    # Display the current queue
-    await ctx.send('\n'.join(queue))
+    # Inform user if queue is empty
+    if not queue:
+        await ctx.send("Queue is empty!")
+        return
 
-bot.run('Your Discord Token')
+    # Display the current queue
+    enumerated_queue = [f"{idx + 1}. {item}" for idx, item in enumerate(queue)]
+    await ctx.send('\n'.join(enumerated_queue))
+
+
+@bot.event
+async def on_ready():
+    process_queue.start()
+
+
+def run_bot():
+    bot.run('Your Discord Token')
+
+
+if __name__ == '__main__':
+    run_bot()
