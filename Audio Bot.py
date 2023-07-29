@@ -17,6 +17,9 @@ intents.message_content = True
 # Create bot
 bot = commands.Bot(command_prefix='!', intents=intents)
 
+# Dictionary to store the log channel ID for each guild
+log_channel_ids = {}
+
 # Create a queue of search terms
 queue = []
 
@@ -38,10 +41,12 @@ async def play(ctx, *, search_term: str):
 
     if ctx.voice_client is None:
         voice_client = await channel.connect()
+        await voice_client.guild.me.edit(deafen=True)
     else:
         voice_client = ctx.voice_client
         if voice_client.channel != channel:
             await voice_client.move_to(channel)
+            await voice_client.guild.me.edit(deafen=True)
 
     # Add both the search term and context to the queue
     queue.append((search_term, ctx))
@@ -110,9 +115,47 @@ async def display_queue(ctx):
     await ctx.send('\n'.join(enumerated_queue))
 
 
+@bot.command(brief="This will set a default channel to send the messages to", aliases=['ch', 'channel'])
+@commands.has_permissions(administrator=True)  # Restrict to admins
+# Set the Default channel
+async def set_log_channel(ctx, channel: discord.TextChannel):
+    log_channel_ids[ctx.guild.id] = channel.id
+    await ctx.send(f"Log channel set to {channel.mention}")
+
+
+# Function to send a message to the log channel
+# Not Fully Utilized yet
+async def send_to_log_channel(guild, message):
+    channel_id = log_channel_ids.get(guild.id)
+    if channel_id:
+        channel = bot.get_channel(channel_id)
+        if channel:
+            await channel.send(message)
+        else:
+            print(f"Channel with ID {channel_id} not found")
+    else:
+        print("Log channel not set for this guild")
+
+
 @bot.event
 async def on_ready():
     process_queue.start()
+
+    for guild in bot.guilds:
+        # Set the log channel ID to the first text channel of the guild
+        log_channel_ids[guild.id] = next(
+            (channel.id for channel in guild.text_channels), None)
+
+
+@bot.event
+async def on_voice_state_update(member, before, after):
+    if member == bot.user and not after.deaf:
+        # Deafen the bot again
+        await member.guild.me.edit(deafen=True)
+        await send_to_log_channel(member.guild,
+                                  "To maintain stability of the bot, we need the bot to stay deafened... "
+                                  "or whatever the other bots said, idk")
+
 
 
 def run_bot():
