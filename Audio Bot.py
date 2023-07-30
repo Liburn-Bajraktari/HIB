@@ -1,13 +1,12 @@
 import subprocess
 import discord
 from discord.ext import commands, tasks
-import time
 import os
 import logging
 import asyncio
 
 # Setup logging
-logging.basicConfig(filename='AudioBot_Py_Log.log', level=logging.INFO,
+logging.basicConfig(filename='AudioBot_Py.log', level=logging.INFO,
                     format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 
 # Create Intents
@@ -15,6 +14,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 # Create bot
+bot_token = 'Your Discord Token'  # Discord Token
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # Dictionary to store the log channel ID for each guild
@@ -67,20 +67,21 @@ async def process_queue():
             # Get the next search term from the queue
             search_term, ctx = queue.pop(0)
             # Wait until the filename.txt file exists, up to a maximum of 5 attempts
+            filename_path = 'downloads\\filename.txt'
             for i in range(5):
-                if os.path.exists('filename.txt'):
+                if os.path.exists(filename_path):
                     break
-                time.sleep(1)
+                await asyncio.sleep(1)
             else:
                 print(f"Failed to find filename for {search_term}")
                 return
 
             # Read the filename from the filename.txt file
-            with open('filename.txt', 'r') as file:
+            with open(filename_path, 'r') as file:  # Corrected path
                 filename = file.read().strip()
 
             # Remove the .mp3 extension
-            display_name = filename[:-4]
+            display_name = os.path.basename(filename)[:-4]
 
             # Play the downloaded audio file
             def after_playing(error):
@@ -99,6 +100,7 @@ async def process_queue():
             voice_client.play(discord.FFmpegPCMAudio(filename), after=after_playing)
 
             await ctx.send('Now Playing **' + display_name + '**')
+
 
 
 @bot.command(brief="This will display the current queue", aliases=['q', 'queue'])
@@ -157,9 +159,8 @@ async def on_voice_state_update(member, before, after):
                                   "or whatever the other bots said, idk")
 
 
-
 def run_bot():
-    bot.run('Your Discord Token')
+    bot.run(bot_token)  # Use environment variable for token
 
 
 if __name__ == '__main__':
