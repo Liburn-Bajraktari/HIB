@@ -1,0 +1,14 @@
+{
+    "name": "audio-bot",
+    "version": "1.0.0",
+    "description": "A bot to download audio files using Node.js and play them using Python.",
+    "main": "download.js",
+    "scripts": {
+      "start": "node download.js"
+    },
+    "dependencies": {
+      "youtube-sr": "^4.1.11",
+      "ytdl-core": "^4.9.1"
+    }
+  }
+  

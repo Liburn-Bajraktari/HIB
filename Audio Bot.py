@@ -14,7 +14,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 # Create bot
-bot_token = 'Your Discord Token'  # Discord Token
+bot_token = 'Token Goes Here'  # Discord Token
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # Dictionary to store the log channel ID for each guild
@@ -48,12 +48,14 @@ async def play(ctx, *, search_term: str):
             await voice_client.move_to(channel)
             await voice_client.guild.me.edit(deafen=True)
 
-    # Add both the search term and context to the queue
-    queue.append((search_term, ctx))
-    logging.info(f"Added {search_term} to queue")
-
     # Run the Node.js script to download audio
-    subprocess.run(['node', 'download.js', search_term])
+    process = subprocess.run(['node', 'download.js', search_term])
+    if process.returncode != 0:
+        await ctx.send(f"Failed to download or play '{search_term}'. Please try a different song or command")
+    else:
+        # Add both the search term and context to the queue
+        queue.append((search_term, ctx))
+        logging.info(f"Added {search_term} to queue")
 
 
 @tasks.loop(seconds=1)
@@ -100,7 +102,6 @@ async def process_queue():
             voice_client.play(discord.FFmpegPCMAudio(filename), after=after_playing)
 
             await ctx.send('Now Playing **' + display_name + '**')
-
 
 
 @bot.command(brief="This will display the current queue", aliases=['q', 'queue'])

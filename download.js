@@ -62,6 +62,7 @@ YouTube.search(search_term, { limit: 1 })
     .catch(err => {
         if (err.statusCode === 410) {
           log(`Error downloading video (Status code 410): ${search_term}`);
+          process.exit(1); // Exit with code 1 to signal an error
         } else {
           log(err.message);
         }
